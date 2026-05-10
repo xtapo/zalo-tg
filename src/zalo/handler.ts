@@ -31,11 +31,11 @@ function parseBankCardHtml(html: string): BankCardInfo | null {
 
   // p-tag order from Zalo HTML: [BIN, BankName, AccountNumber, HolderName?, ...]
   const numericTags = ptags.filter(t => /^\d+$/.test(t));
-  const textTags    = ptags.filter(t => !/^\d+$/.test(t));
+  const textTags = ptags.filter(t => !/^\d+$/.test(t));
 
   const accountNumber = numericTags.find(t => t.length !== 6) ?? numericTags[1] ?? numericTags[0] ?? '';
-  const bankName      = textTags[0] ?? '';
-  const holderName    = textTags[1]?.trim() || undefined;
+  const bankName = textTags[0] ?? '';
+  const holderName = textTags[1]?.trim() || undefined;
 
   if (!vietqr) return null;
   return { bankName, accountNumber, holderName, vietqr };
@@ -43,56 +43,8 @@ function parseBankCardHtml(html: string): BankCardInfo | null {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Fetch group member list and populate `userCache` so mention resolution works
- * immediately even before any group message is received.
- */
-async function populateGroupMemberCache(api: ZaloAPI, groupId: string): Promise<void> {
-  try {
-    const info = await api.getGroupInfo(groupId) as {
-      gridInfoMap?: Record<string, {
-        memVerList?: string[];
-        totalMember?: number;
-      }>;
-    };
-    const groupData = info?.gridInfoMap?.[groupId];
-    if (!groupData) {
-      console.warn(`[Zalo] getGroupInfo: no data for group ${groupId}`);
-      return;
-    }
 
-    // memVerList entries are "uid_version" — extract UIDs
-    const uids = (groupData.memVerList ?? [])
-      .map(s => s.split('_')[0])
-      .filter(Boolean);
-    if (uids.length === 0) {
-      console.warn(`[Zalo] group ${groupId}: empty memVerList (totalMember=${groupData.totalMember})`);
-      return;
-    }
-
-    // Batch-fetch display names (getUserInfo accepts up to ~50 per call)
-    const BATCH = 50;
-    let saved = 0;
-    for (let i = 0; i < uids.length; i += BATCH) {
-      const batch = uids.slice(i, i + BATCH);
-      const resp = await api.getUserInfo(batch) as {
-        changed_profiles?: Record<string, { displayName?: string; zaloName?: string }>;
-        unchanged_profiles?: Record<string, unknown>;
-      };
-      const profiles = resp?.changed_profiles ?? {};
-      // unchanged_profiles also has profile data
-      const unchanged = resp?.unchanged_profiles ?? {};
-      for (const uid of batch) {
-        const p = (profiles[uid] ?? unchanged[uid]) as { displayName?: string; zaloName?: string } | undefined;
-        const name = p?.displayName?.trim() || p?.zaloName?.trim();
-        if (uid && name) { userCache.save(uid, name); saved++; }
-      }
-    }
-    console.log(`[Zalo] Cached ${saved}/${uids.length} members for group ${groupId}`);
-  } catch (err) {
-    console.warn(`[Zalo] populateGroupMemberCache failed for ${groupId}:`, err);
-  }
-}
+const _pendingTopicCreates = new Map<string, Promise<number>>();
 
 async function getOrCreateTopic(
   zaloId: string,
@@ -103,43 +55,57 @@ async function getOrCreateTopic(
   const existing = store.getTopicByZalo(zaloId, type);
   if (existing !== undefined) return existing;
 
-  const name  = topicName(displayName, type);
-  const color = type === ThreadType.Group ? 0xFF93B2 : 0x6FB9F0;
-
-  const topic = await tgBot.telegram.createForumTopic(
-    config.telegram.groupId,
-    name,
-    { icon_color: color },
-  );
-
-  const topicId = topic.message_thread_id;
-  store.set({ topicId, zaloId, type, name: displayName });
-  console.log(`[Zalo→TG] New topic: "${name}" (topicId=${topicId})`);
-
-  // Pin group avatar as the first message in the topic
-  if (type === 1 /* Group */ && avatarUrl) {
-    try {
-      const localPath = await downloadToTemp(avatarUrl, `avatar_${Date.now()}.jpg`);
-      const stream = createReadStream(localPath);
-      const avatarMsg = await tgBot.telegram.sendPhoto(
-        config.telegram.groupId,
-        { source: stream },
-        {
-          message_thread_id: topicId,
-          caption: `🖼 Ảnh đại diện nhóm <b>${escapeHtml(displayName)}</b>`,
-          parse_mode: 'HTML',
-        },
-      );
-      await cleanTemp(localPath);
-      try {
-        await tgBot.telegram.pinChatMessage(config.telegram.groupId, avatarMsg.message_id, { disable_notification: true });
-      } catch { /* pinning requires admin rights */ }
-    } catch (avatarErr) {
-      console.warn(`[Zalo→TG] Failed to pin group avatar for ${displayName}:`, avatarErr);
-    }
+  const key = `${type}:${zaloId}`;
+  if (_pendingTopicCreates.has(key)) {
+    return _pendingTopicCreates.get(key)!;
   }
 
-  return topicId;
+  const createPromise = (async () => {
+    try {
+      const name = topicName(displayName, type);
+      const color = type === ThreadType.Group ? 0xFF93B2 : 0x6FB9F0;
+
+      const topic = await tgBot.telegram.createForumTopic(
+        config.telegram.groupId,
+        name,
+        { icon_color: color },
+      );
+
+      const topicId = topic.message_thread_id;
+      store.set({ topicId, zaloId, type, name: displayName });
+      console.log(`[Zalo→TG] New topic: "${name}" (topicId=${topicId})`);
+
+      // Pin group avatar as the first message in the topic
+      if (type === 1 /* Group */ && avatarUrl) {
+        try {
+          const localPath = await downloadToTemp(avatarUrl, `avatar_${Date.now()}.jpg`);
+          const stream = createReadStream(localPath);
+          const avatarMsg = await tgBot.telegram.sendPhoto(
+            config.telegram.groupId,
+            { source: stream },
+            {
+              message_thread_id: topicId,
+              caption: `🖼 Ảnh đại diện nhóm <b>${escapeHtml(displayName)}</b>`,
+              parse_mode: 'HTML',
+            },
+          );
+          await cleanTemp(localPath);
+          try {
+            await tgBot.telegram.pinChatMessage(config.telegram.groupId, avatarMsg.message_id, { disable_notification: true });
+          } catch { /* pinning requires admin rights */ }
+        } catch (avatarErr) {
+          console.warn(`[Zalo→TG] Failed to pin group avatar for ${displayName}:`, avatarErr);
+        }
+      }
+
+      return topicId;
+    } finally {
+      _pendingTopicCreates.delete(key);
+    }
+  })();
+
+  _pendingTopicCreates.set(key, createPromise);
+  return createPromise;
 }
 
 /**
@@ -179,17 +145,7 @@ function buildScoreText(header: string, options: Pick<PollOptions, 'content' | '
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-/** Track which groups already had their member cache populated this session. */
-const _memberCacheLoaded = new Set<string>();
-
 export function setupZaloHandler(api: ZaloAPI): void {
-  // Pre-populate userCache for all existing group topics on startup
-  for (const entry of store.all()) {
-    if (entry.type === 1 /* Group */) {
-      void populateGroupMemberCache(api, entry.zaloId);
-      _memberCacheLoaded.add(entry.zaloId);
-    }
-  }
 
   api.listener.on('message', async (msg: ZaloMessage) => {
     try {
@@ -209,16 +165,12 @@ export function setupZaloHandler(api: ZaloAPI): void {
         // isSelf but NOT a bot echo → user sent from Zalo app, forward to TG
       }
 
-      const zaloId     = msg.threadId;
-      const type       = msg.type as 0 | 1;
+      const zaloId = msg.threadId;
+      const type = msg.type as 0 | 1;
       const senderName = msg.data.dName ?? msg.data.uidFrom;
-      const msgType    = msg.data.msgType ?? ZALO_MSG_TYPES.TEXT;
+      const msgType = msg.data.msgType ?? ZALO_MSG_TYPES.TEXT;
 
-      // Pre-populate member cache the first time we see a new group
-      if (type === 1 && !_memberCacheLoaded.has(zaloId)) {
-        _memberCacheLoaded.add(zaloId);
-        void populateGroupMemberCache(api, zaloId);
-      }
+
 
       // Keep userCache up-to-date so TG→Zalo mention resolution works
       userCache.save(msg.data.uidFrom, senderName);
@@ -255,20 +207,20 @@ export function setupZaloHandler(api: ZaloAPI): void {
       }
 
       const caption = type === ThreadType.Group ? groupCaption(senderName) : undefined;
-      const tgOpts  = { ...tgBase, parse_mode: 'HTML' as const, caption };
+      const tgOpts = { ...tgBase, parse_mode: 'HTML' as const, caption };
 
       // Build quote data + mapping helper — saved after every successful TG send
       const zaloMsgIds = msg.data.realMsgId && msg.data.realMsgId !== msg.data.msgId
         ? [msg.data.msgId, msg.data.realMsgId]
         : [msg.data.msgId];
       const zaloQuoteData: ZaloQuoteData = {
-        msgId:    msg.data.msgId,
+        msgId: msg.data.msgId,
         cliMsgId: msg.data.cliMsgId ?? '',
-        uidFrom:  msg.data.uidFrom,
-        ts:       msg.data.ts,
-        msgType:  msgType,
-        content:  msg.data.content as string | Record<string, unknown>,
-        ttl:      msg.data.ttl ?? 0,
+        uidFrom: msg.data.uidFrom,
+        ts: msg.data.ts,
+        msgType: msgType,
+        content: msg.data.content as string | Record<string, unknown>,
+        ttl: msg.data.ttl ?? 0,
         zaloId,
         threadType: type,
       };
@@ -535,7 +487,7 @@ ${escapeHtml(photoCaption)}`
 
       // ── 8. Link ────────────────────────────────────────────────────────────
       if (msgType === ZALO_MSG_TYPES.LINK) {
-        const href  = media.href;
+        const href = media.href;
         const title = media.title ?? href;
         if (!href) return;
         const linkText = type === ThreadType.Group
@@ -557,7 +509,7 @@ ${escapeHtml(photoCaption)}`
           try {
             const parsedParams = JSON.parse(media.params) as {
               pcItem?: { data_url?: string };
-              item?:   { data_url?: string };
+              item?: { data_url?: string };
             };
             const dataUrl = parsedParams.pcItem?.data_url ?? parsedParams.item?.data_url;
             if (dataUrl) {
@@ -570,9 +522,9 @@ ${escapeHtml(photoCaption)}`
                   color: { dark: '#000000ff', light: '#ffffffff' },
                 });
                 let caption = `🏦 <b>Tài khoản ngân hàng</b>`;
-                if (info.bankName)      caption += `\nNgân hàng: <b>${info.bankName}</b>`;
+                if (info.bankName) caption += `\nNgân hàng: <b>${info.bankName}</b>`;
                 if (info.accountNumber) caption += `\nSTK: <code>${info.accountNumber}</code>`;
-                if (info.holderName)    caption += `\nChủ TK: <b>${info.holderName}</b>`;
+                if (info.holderName) caption += `\nChủ TK: <b>${info.holderName}</b>`;
                 const fullCaption = type === ThreadType.Group
                   ? `${groupCaption(senderName)}\n${caption}`
                   : caption;
@@ -608,8 +560,8 @@ ${escapeHtml(photoCaption)}`
         const ACTION_ICONS: Record<string, string> = {
           'zinstant.bankcard': '🏦',
           'zinstant.transfer': '💸',
-          'zinstant.invoice':  '🧾',
-          'zinstant.qr':       '📷',
+          'zinstant.invoice': '🧾',
+          'zinstant.qr': '📷',
         };
         const icon = ACTION_ICONS[media.action ?? ''] ?? '📋';
         const body = `${icon} ${label}`;
@@ -652,9 +604,9 @@ ${escapeHtml(photoCaption)}`
         } else {
           // Fallback: Google Maps link
           const mapsUrl = media.href || '#';
-          const body    = `📍 <a href="${mapsUrl}">Vị trí</a>`;
-          const text    = type === ThreadType.Group ? `${groupCaption(senderName)}\n${body}` : body;
-          const sent    = await tgBot.telegram.sendMessage(config.telegram.groupId, text, { ...tgBase, parse_mode: 'HTML' });
+          const body = `📍 <a href="${mapsUrl}">Vị trí</a>`;
+          const text = type === ThreadType.Group ? `${groupCaption(senderName)}\n${body}` : body;
+          const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, text, { ...tgBase, parse_mode: 'HTML' });
           saveTgMapping(sent);
         }
         return;
@@ -673,10 +625,10 @@ ${escapeHtml(photoCaption)}`
             isAnonymous?: boolean;
             action?: string;
           };
-          pollId      = p.pollId;
-          question    = p.question ?? '';
+          pollId = p.pollId;
+          question = p.question ?? '';
           isAnonymous = p.isAnonymous ?? false;
-          action      = media.action ?? '';
+          action = media.action ?? '';
         } catch { /* ignore */ }
 
         console.log(`[ZaloHandler] Poll event: action="${action}" pollId=${pollId}`);
@@ -718,7 +670,7 @@ ${escapeHtml(photoCaption)}`
             options.map(o => o.content),
             {
               ...tgBase,
-              is_anonymous:        isAnonymous,
+              is_anonymous: isAnonymous,
               allows_multiple_answers: pollDetail?.allow_multi_choices ?? false,
               question_parse_mode: undefined,
             } as Parameters<typeof tgBot.telegram.sendPoll>[3],
@@ -734,11 +686,11 @@ ${escapeHtml(photoCaption)}`
 
           pollStore.save({
             pollId,
-            zaloGroupId:  zaloId,
-            tgPollMsgId:  tgPollMsg.message_id,
-            tgPollUUID:   (tgPollMsg as { poll?: { id?: string } }).poll?.id ?? '',
+            zaloGroupId: zaloId,
+            tgPollMsgId: tgPollMsg.message_id,
+            tgPollUUID: (tgPollMsg as { poll?: { id?: string } }).poll?.id ?? '',
             tgScoreMsgId: tgScoreMsg.message_id,
-            tgThreadId:   topicId,
+            tgThreadId: topicId,
             options: options.map(o => ({ option_id: o.option_id, content: o.content })),
           });
           saveTgMapping(tgPollMsg);
@@ -779,8 +731,10 @@ ${escapeHtml(photoCaption)}`
               const newScore = await tgBot.telegram.sendMessage(
                 config.telegram.groupId,
                 scoreText,
-                { message_thread_id: existingEntry.tgThreadId, parse_mode: 'HTML',
-                  reply_parameters: { message_id: existingEntry.tgPollMsgId, allow_sending_without_reply: true } },
+                {
+                  message_thread_id: existingEntry.tgThreadId, parse_mode: 'HTML',
+                  reply_parameters: { message_id: existingEntry.tgPollMsgId, allow_sending_without_reply: true }
+                },
               );
               pollStore.updateScoreMsg(pollId, newScore.message_id);
             }
@@ -861,8 +815,16 @@ ${escapeHtml(photoCaption)}`
         parse_mode: 'HTML',
       });
       saveTgMapping(sentFallback);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[ZaloHandler] Error:', err);
+      // Auto-recover deleted topics: if Telegram says the topic is missing, clear it from store
+      if (err?.response?.description?.includes('message thread not found') || String(err).includes('message thread not found')) {
+        const topicId = err?.on?.payload?.message_thread_id;
+        if (topicId) {
+          console.log(`[ZaloHandler] Auto-recovering: removing deleted topicId=${topicId} from store.`);
+          store.remove(Number(topicId));
+        }
+      }
     }
   });
 
@@ -883,7 +845,7 @@ ${escapeHtml(photoCaption)}`
 
       // Find which topic this message belongs to
       const zaloId = undo?.threadId ?? data?.idTo;
-      const type   = (undo?.isGroup ? 1 : 0) as 0 | 1;
+      const type = (undo?.isGroup ? 1 : 0) as 0 | 1;
       const topicId = store.getTopicByZalo(String(zaloId), type);
       if (topicId === undefined) return;
 
@@ -904,39 +866,39 @@ ${escapeHtml(photoCaption)}`
 
   // ── Reaction (cảm xúc) ─────────────────────────────────────────────────────
   const REACTION_EMOJI: Record<string, string> = {
-    '/-heart':   '❤️',
-    '/-strong':  '👍',
-    ':>':        '😄',
-    ':o':        '😮',
-    ':-((':      '😢',
-    ':-h':       '😡',
-    ':-*':       '😘',
-    ":')":       '😂',
-    '/-shit':    '💩',
-    '/-rose':    '🌹',
-    '/-break':   '💔',
-    '/-weak':    '👎',
-    ';xx':       '🥰',
-    ';-/':       '😕',
-    ';-)':       '😉',
-    '/-fade':    '✨',
-    '/-ok':      '👌',
-    '/-v':       '✌️',
-    '/-thanks':  '🙏',
-    '/-punch':   '👊',
-    '/-no':      '🙅',
-    '/-loveu':   '🤟',
-    '--b':       '😞',
+    '/-heart': '❤️',
+    '/-strong': '👍',
+    ':>': '😄',
+    ':o': '😮',
+    ':-((': '😢',
+    ':-h': '😡',
+    ':-*': '😘',
+    ":')": '😂',
+    '/-shit': '💩',
+    '/-rose': '🌹',
+    '/-break': '💔',
+    '/-weak': '👎',
+    ';xx': '🥰',
+    ';-/': '😕',
+    ';-)': '😉',
+    '/-fade': '✨',
+    '/-ok': '👌',
+    '/-v': '✌️',
+    '/-thanks': '🙏',
+    '/-punch': '👊',
+    '/-no': '🙅',
+    '/-loveu': '🤟',
+    '--b': '😞',
     ':((': '😭',
-    'x-)':       '😎',
-    '_()_':      '🙏',
-    '/-bd':      '🎂',
-    '/-bome':    '💣',
-    '/-beer':    '🍺',
-    '/-li':      '☀️',
-    '/-share':   '🔁',
-    '/-bad':     '😤',
-    '':          '❌',  // remove reaction
+    'x-)': '😎',
+    '_()_': '🙏',
+    '/-bd': '🎂',
+    '/-bome': '💣',
+    '/-beer': '🍺',
+    '/-li': '☀️',
+    '/-share': '🔁',
+    '/-bad': '😤',
+    '': '❌',  // remove reaction
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -957,7 +919,7 @@ ${escapeHtml(photoCaption)}`
       if (tgMsgId === undefined) return;
 
       const zaloId = reaction?.threadId ?? data?.idTo;
-      const type   = (reaction?.isGroup ? 1 : 0) as 0 | 1;
+      const type = (reaction?.isGroup ? 1 : 0) as 0 | 1;
       const topicId = store.getTopicByZalo(String(zaloId), type);
       if (topicId === undefined) return;
 
@@ -982,8 +944,8 @@ ${escapeHtml(photoCaption)}`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   api.listener.on('group_event', async (event: any) => {
     try {
-      const type    = event?.type as string | undefined;
-      const data    = event?.data;
+      const type = event?.type as string | undefined;
+      const data = event?.data;
       const groupId = String(event?.threadId ?? data?.groupId ?? '');
       if (!groupId) return;
 
@@ -1024,11 +986,13 @@ ${escapeHtml(photoCaption)}`
                 const newScore = await tgBot.telegram.sendMessage(
                   config.telegram.groupId,
                   scoreText,
-                  { message_thread_id: entry.tgThreadId, parse_mode: 'HTML',
+                  {
+                    message_thread_id: entry.tgThreadId, parse_mode: 'HTML',
                     reply_parameters: { message_id: entry.tgPollMsgId, allow_sending_without_reply: true },
                     reply_markup: detail.closed
                       ? { inline_keyboard: [] }
-                      : { inline_keyboard: [[{ text: '🔒 Khoá bình chọn', callback_data: `lock_poll:${pollId}` }]] } },
+                      : { inline_keyboard: [[{ text: '🔒 Khoá bình chọn', callback_data: `lock_poll:${pollId}` }]] }
+                  },
                 );
                 pollStore.updateScoreMsg(pollId, newScore.message_id);
               }
@@ -1049,7 +1013,7 @@ ${escapeHtml(photoCaption)}`
 
       const members: Array<{ dName?: string }> = data?.updateMembers ?? [];
       const names = members.map(m => m.dName ?? '?').join(', ');
-      const actor  = data?.creatorId === data?.sourceId ? '' : '';  // unused for now
+      const actor = data?.creatorId === data?.sourceId ? '' : '';  // unused for now
       void actor;
 
       let notifText = '';

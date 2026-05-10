@@ -1,21 +1,23 @@
 import { Zalo, LoginQRCallbackEventType } from 'zca-js';
 import type { LoginQRCallback } from 'zca-js';
 import { existsSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { imageSizeFromFile } from 'image-size/fromFile';
 import qrcode from 'qrcode-terminal';
 import { config } from '../config.js';
 import type { ZaloAPI } from './types.js';
 
-const QR_IMAGE_PATH = '/tmp/zalo-qr.png';
+const QR_IMAGE_PATH = join(tmpdir(), 'zalo-qr.png');
 
 let _api: ZaloAPI | null = null;
 
 // ── imageMetadataGetter ───────────────────────────────────────────────────────
 // Required by zca-js for uploadAttachment (images/GIFs).
 const ZALO_OPTIONS = {
-  logging:      false,
-  checkUpdate:  false,
-  selfListen:   true,
+  logging: false,
+  checkUpdate: false,
+  selfListen: true,
   imageMetadataGetter: async (filePath: string) => {
     try {
       const { width, height } = await imageSizeFromFile(filePath);
