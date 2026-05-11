@@ -923,7 +923,19 @@ ${escapeHtml(photoCaption)}`
       const topicId = store.getTopicByZalo(String(zaloId), type);
       if (topicId === undefined) return;
 
-      const dName = data?.dName ?? data?.uidFrom ?? 'ai đó';
+      let dName = data?.dName ?? (data?.uidFrom ? userCache.getName(data.uidFrom) : undefined);
+      if (!dName && data?.uidFrom) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const resp = await api.getUserInfo([data.uidFrom]) as any;
+          const p = resp?.changed_profiles?.[data.uidFrom] ?? resp?.unchanged_profiles?.[data.uidFrom];
+          dName = p?.displayName?.trim() || p?.zaloName?.trim();
+          if (dName) userCache.save(data.uidFrom, dName);
+        } catch (e) {
+          // Ignore fetch error, will fallback to ID
+        }
+      }
+      dName = dName ?? data?.uidFrom ?? 'ai đó';
 
       // Send reaction emoji as a reply to the forwarded TG message
       await tgBot.telegram.sendMessage(
