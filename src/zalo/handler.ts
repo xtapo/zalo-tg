@@ -278,65 +278,28 @@ export function setupZaloHandler(api: ZaloAPI): void {
           zaloMsgIds[0],
           { senderName, topicId, tgBase, zaloQuote: zaloQuoteData },
           async (buf) => {
-            if (buf.urls.length === 1) {
-              // Single photo — send normally
-              const singleUrl = buf.urls[0]!;
-              const localPath = await downloadToTemp(singleUrl, `photo_${Date.now()}.jpg`);
-              const stream = createReadStream(localPath);
-              try {
-                const sent = await tgBot.telegram.sendPhoto(
-                  config.telegram.groupId,
-                  { source: stream },
-                  {
-                    ...buf.tgBase,
-                    parse_mode: 'HTML' as const,
-                    caption: type === ThreadType.Group
-                      ? photoCaption
-                        ? `${groupCaption(buf.senderName)}
+            try {
+              if (buf.urls.length === 1) {
+                // Single photo — send normally
+                const singleUrl = buf.urls[0]!;
+                const localPath = await downloadToTemp(singleUrl, `photo_${Date.now()}.jpg`);
+                const stream = createReadStream(localPath);
+                try {
+                  const sent = await tgBot.telegram.sendPhoto(
+                    config.telegram.groupId,
+                    { source: stream },
+                    {
+                      ...buf.tgBase,
+                      parse_mode: 'HTML' as const,
+                      caption: type === ThreadType.Group
+                        ? photoCaption
+                          ? `${groupCaption(buf.senderName)}
 ${escapeHtml(photoCaption)}`
-                        : groupCaption(buf.senderName)
-                      : photoCaption ? escapeHtml(photoCaption) : undefined,
-                  },
-                );
-                msgStore.save(sent.message_id, buf.zaloMsgIds, {
-                  msgId: buf.zaloMsgIds[0]!,
-                  cliMsgId: '',
-                  uidFrom: msg.data.uidFrom,
-                  ts: msg.data.ts,
-                  msgType,
-                  content: msg.data.content as string | Record<string, unknown>,
-                  ttl: msg.data.ttl ?? 0,
-                  zaloId,
-                  threadType: type,
-                });
-              } finally { await cleanTemp(localPath); }
-            } else {
-              // Multi-photo album — download all and send as media group
-              const localPaths: string[] = [];
-              try {
-                for (const u of buf.urls) {
-                  localPaths.push(await downloadToTemp(u, `photo_${Date.now()}.jpg`));
-                }
-                const captionText = type === ThreadType.Group
-                  ? photoCaption
-                    ? `${groupCaption(buf.senderName)}
-${escapeHtml(photoCaption)}`
-                    : groupCaption(buf.senderName)
-                  : photoCaption ? escapeHtml(photoCaption) : undefined;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const mediaItems: any[] = localPaths.map((lp, i) => ({
-                  type: 'photo',
-                  media: { source: createReadStream(lp) },
-                  ...(i === 0 && captionText ? { caption: captionText, parse_mode: 'HTML' } : {}),
-                }));
-                const sentMsgs = await tgBot.telegram.sendMediaGroup(
-                  config.telegram.groupId,
-                  mediaItems,
-                  { message_thread_id: buf.topicId } as Parameters<typeof tgBot.telegram.sendMediaGroup>[2],
-                );
-                // Save mapping for first photo (for reply chain)
-                if (sentMsgs.length > 0) {
-                  msgStore.save(sentMsgs[0]!.message_id, buf.zaloMsgIds, {
+                          : groupCaption(buf.senderName)
+                        : photoCaption ? escapeHtml(photoCaption) : undefined,
+                    },
+                  );
+                  msgStore.save(sent.message_id, buf.zaloMsgIds, {
                     msgId: buf.zaloMsgIds[0]!,
                     cliMsgId: '',
                     uidFrom: msg.data.uidFrom,
@@ -347,10 +310,51 @@ ${escapeHtml(photoCaption)}`
                     zaloId,
                     threadType: type,
                   });
+                } finally { await cleanTemp(localPath); }
+              } else {
+                // Multi-photo album — download all and send as media group
+                const localPaths: string[] = [];
+                try {
+                  for (const u of buf.urls) {
+                    localPaths.push(await downloadToTemp(u, `photo_${Date.now()}.jpg`));
+                  }
+                  const captionText = type === ThreadType.Group
+                    ? photoCaption
+                      ? `${groupCaption(buf.senderName)}
+${escapeHtml(photoCaption)}`
+                      : groupCaption(buf.senderName)
+                    : photoCaption ? escapeHtml(photoCaption) : undefined;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const mediaItems: any[] = localPaths.map((lp, i) => ({
+                    type: 'photo',
+                    media: { source: createReadStream(lp) },
+                    ...(i === 0 && captionText ? { caption: captionText, parse_mode: 'HTML' } : {}),
+                  }));
+                  const sentMsgs = await tgBot.telegram.sendMediaGroup(
+                    config.telegram.groupId,
+                    mediaItems,
+                    { message_thread_id: buf.topicId } as Parameters<typeof tgBot.telegram.sendMediaGroup>[2],
+                  );
+                  // Save mapping for first photo (for reply chain)
+                  if (sentMsgs.length > 0) {
+                    msgStore.save(sentMsgs[0]!.message_id, buf.zaloMsgIds, {
+                      msgId: buf.zaloMsgIds[0]!,
+                      cliMsgId: '',
+                      uidFrom: msg.data.uidFrom,
+                      ts: msg.data.ts,
+                      msgType,
+                      content: msg.data.content as string | Record<string, unknown>,
+                      ttl: msg.data.ttl ?? 0,
+                      zaloId,
+                      threadType: type,
+                    });
+                  }
+                } finally {
+                  for (const lp of localPaths) await cleanTemp(lp);
                 }
-              } finally {
-                for (const lp of localPaths) await cleanTemp(lp);
               }
+            } catch (err: any) {
+              console.error('[ZaloHandler] Failed to process album photos:', err);
             }
           },
         );
