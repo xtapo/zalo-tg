@@ -10,8 +10,15 @@ export const tgBot = new Telegraf(config.telegram.token, {
   telegram: { agent },
 });
 
-// Implement an automatic retry mechanism for Telegram API's 429 Rate Limit errors.
-// This prevents message drops when Zalo forwards multiple items concurrently.
+// Automatic retry for Telegram API errors:
+// - 429 Rate Limit: wait the requested retry_after duration
+// - Network errors (ETIMEDOUT, ECONNRESET, etc.): exponential backoff
+const RETRYABLE_NETWORK_CODES = new Set([
+  'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND',
+  'EAI_AGAIN', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH',
+]);
+const MAX_RETRIES = 3;
+
 const originalCallApi = tgBot.telegram.callApi.bind(tgBot.telegram);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 tgBot.telegram.callApi = async function (method: string, payload?: object, options?: any) {
@@ -20,14 +27,30 @@ tgBot.telegram.callApi = async function (method: string, payload?: object, optio
     try {
       return await originalCallApi(method, payload, options);
     } catch (err: any) {
-      if (err.code === 429 && err.parameters?.retry_after && attempt < 3) {
+      const code: string | undefined = err.code ?? err.errno;
+
+      // 429 Rate Limit — use Telegram's retry_after
+      if (err.code === 429 && err.parameters?.retry_after && attempt < MAX_RETRIES) {
         attempt++;
-        // Telegram retry_after is in seconds
         const waitTime = err.parameters.retry_after * 1000;
-        console.warn(`[Telegram API] 429 Rate limit on ${method}. Waiting ${waitTime}ms... (Attempt ${attempt}/3)`);
+        console.warn(`[Telegram API] 429 Rate limit on ${method}. Waiting ${waitTime}ms... (Attempt ${attempt}/${MAX_RETRIES})`);
         await new Promise(r => setTimeout(r, waitTime));
         continue;
       }
+
+      // Network errors — exponential backoff (2s, 4s, 8s)
+      const isNetworkError =
+        (code && RETRYABLE_NETWORK_CODES.has(code)) ||
+        /socket hang up|network/.test(err.message ?? '');
+
+      if (isNetworkError && attempt < MAX_RETRIES) {
+        attempt++;
+        const waitTime = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+        console.warn(`[Telegram API] Network error (${code ?? 'unknown'}) on ${method}. Retrying in ${waitTime}ms... (Attempt ${attempt}/${MAX_RETRIES})`);
+        await new Promise(r => setTimeout(r, waitTime));
+        continue;
+      }
+
       throw err;
     }
   }

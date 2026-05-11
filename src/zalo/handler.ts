@@ -175,7 +175,7 @@ export function setupZaloHandler(api: ZaloAPI): void {
       // Keep userCache up-to-date so TG→Zalo mention resolution works
       userCache.save(msg.data.uidFrom, senderName);
 
-      // Resolve group name
+      // Resolve display name for topic creation
       let displayName = senderName;
       let groupAvatarUrl: string | undefined;
       if (type === ThreadType.Group) {
@@ -184,6 +184,24 @@ export function setupZaloHandler(api: ZaloAPI): void {
           displayName = info?.gridInfoMap?.[zaloId]?.name ?? senderName;
           groupAvatarUrl = info?.gridInfoMap?.[zaloId]?.avt;
         } catch { /* non-fatal */ }
+      } else if (msg.isSelf) {
+        // DM sent by the user from Zalo app: threadId is the OTHER person's ID.
+        // Use their name for the topic, not ours.
+        const cachedName = userCache.getName(zaloId);
+        if (cachedName) {
+          displayName = cachedName;
+        } else {
+          try {
+            const resp = await api.getUserInfo(zaloId) as {
+              changed_profiles?: Record<string, { displayName?: string }>;
+            };
+            const fetchedName = resp?.changed_profiles?.[zaloId]?.displayName;
+            if (fetchedName) {
+              displayName = fetchedName;
+              userCache.save(zaloId, fetchedName);
+            }
+          } catch { /* non-fatal, falls back to senderName */ }
+        }
       }
 
       const topicId = await getOrCreateTopic(zaloId, type, displayName, groupAvatarUrl);

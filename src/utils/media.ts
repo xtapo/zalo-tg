@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { createWriteStream, mkdirSync } from 'fs';
+import { createWriteStream, mkdirSync, statSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { spawn } from 'child_process';
 import path from 'path';
@@ -29,7 +29,18 @@ export async function downloadToTemp(url: string, fileName?: string): Promise<st
   await new Promise<void>((resolve, reject) => {
     const writer = createWriteStream(filePath);
     resp.data.pipe(writer);
-    writer.on('finish', resolve);
+    writer.on('finish', () => {
+      try {
+        const stats = statSync(filePath);
+        if (stats.size === 0) {
+          reject(new Error('Downloaded file is 0 bytes'));
+        } else {
+          resolve();
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
     writer.on('error', reject);
   });
 
@@ -66,10 +77,10 @@ const VIDEO_EXTS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']);
 /** Guess media type from filename or URL. */
 export function detectMediaType(fileNameOrUrl: string): 'image' | 'video' | 'document' {
   const lower = fileNameOrUrl.toLowerCase();
-  const ext   = path.extname(lower.split('?')[0] ?? '');
+  const ext = path.extname(lower.split('?')[0] ?? '');
   if (IMAGE_EXTS.has(ext)) return 'image';
   if (VIDEO_EXTS.has(ext)) return 'video';
   if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/.test(lower)) return 'image';
-  if (/\.(mp4|mov|avi|mkv|webm)(\?|$)/.test(lower))  return 'video';
+  if (/\.(mp4|mov|avi|mkv|webm)(\?|$)/.test(lower)) return 'video';
   return 'document';
 }
