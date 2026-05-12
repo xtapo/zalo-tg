@@ -157,7 +157,7 @@ export function setupTelegramHandler(
   const setCurrentApi = (api: ZaloAPI) => { currentApi = api; };
 
   tgBot.command('login', async (ctx) => {
-    const isPrivate   = ctx.chat.type === 'private';
+    const isPrivate = ctx.chat.type === 'private';
     const isFromGroup = ctx.chat.id === config.telegram.groupId;
     if (!isPrivate && !isFromGroup) {
       console.log(`[/login] Bỏ qua từ chat ${ctx.chat.id} (không phải group ${config.telegram.groupId} hoặc DM)`);
@@ -332,7 +332,7 @@ export function setupTelegramHandler(
     }
 
     const friendResults = friendsCache.search(query, 8);
-    const groupResults  = groupsCache.search(query, 8);
+    const groupResults = groupsCache.search(query, 8);
 
     if (friendResults.length === 0 && groupResults.length === 0) {
       await ctx.telegram.sendMessage(
@@ -355,7 +355,7 @@ export function setupTelegramHandler(
 
     const parts: string[] = [`🔍 Kết quả "<b>${query}</b>":`, ''];
     if (friendResults.length > 0) parts.push(`👤 <b>Bạn bè</b> (${friendResults.length}):`);
-    if (groupResults.length > 0)  parts.push(`👥 <b>Nhóm</b> (${groupResults.length}):`);
+    if (groupResults.length > 0) parts.push(`👥 <b>Nhóm</b> (${groupResults.length}):`);
     parts.push('', '✅ = đã có topic • Nhấn để tạo topic');
 
     await ctx.telegram.sendMessage(
@@ -534,7 +534,7 @@ export function setupTelegramHandler(
         parts.push(`📤 <b>Lời mời kết bạn đã gửi (${sentList.length})</b>`);
         for (const u of sentList.slice(0, 15)) {
           const name = u.displayName || u.zaloName;
-          const msg  = u.fReqInfo?.message ? ` — "${u.fReqInfo.message}"` : '';
+          const msg = u.fReqInfo?.message ? ` — "${u.fReqInfo.message}"` : '';
           parts.push(`• ${name}${msg}`);
         }
       }
@@ -545,7 +545,7 @@ export function setupTelegramHandler(
         parts.push(`\n📬 <b>Lời mời tham gia nhóm (${invites.length})</b>`);
         const groupButtons: Array<[{ text: string; callback_data: string }]> = [];
         for (const inv of invites.slice(0, 15)) {
-          const g   = inv.groupInfo;
+          const g = inv.groupInfo;
           const exp = new Date(Number(inv.expiredTs) * 1000).toLocaleDateString('vi-VN');
           parts.push(`• 👥 <b>${g.name}</b> (${g.totalMember} TV)\n  Mời bởi: ${inv.inviterInfo.dName} · HH: ${exp}`);
           groupButtons.push([{
@@ -776,41 +776,41 @@ export function setupTelegramHandler(
       // Map TG emoji → Zalo Reactions icon
       // Zalo Reactions enum values are the icon strings used in addReaction
       const TG_TO_ZALO: Record<string, string> = {
-        '❤':  '/-heart',
+        '❤': '/-heart',
         '❤️': '/-heart',
-        '👍':  '/-strong',
-        '👎':  '/-weak',
-        '😄':  ':>',
-        '😁':  ':>',
-        '😢':  ':-((',
-        '😭':  ':((',
-        '😮':  ':o',
-        '😱':  ':o',
-        '😡':  ':-h',
-        '🤬':  ':-h',
-        '😘':  ':-*',
-        '🥰':  ';xx',
-        '😍':  ';xx',
-        '🤣':  ":'>",
-        '😂':  ":'>",
-        '💩':  '/-shit',
-        '🌹':  '/-rose',
-        '💔':  '/-break',
-        '😕':  ';-/',
-        '🤔':  ';-/',
-        '😉':  ';-)',
-        '👌':  '/-ok',
-        '✌️':  '/-v',
-        '✌':  '/-v',
-        '🙏':  '_()_',
-        '👊':  '/-punch',
-        '🤯':  ':o',
-        '🎉':  '/-bd',
-        '🏆':  '/-ok',
-        '💯':  '/-ok',
-        '😎':  'x-)',
-        '🤩':  'x-)',
-        '🔥':  '/-heart',
+        '👍': '/-strong',
+        '👎': '/-weak',
+        '😄': ':>',
+        '😁': ':>',
+        '😢': ':-((',
+        '😭': ':((',
+        '😮': ':o',
+        '😱': ':o',
+        '😡': ':-h',
+        '🤬': ':-h',
+        '😘': ':-*',
+        '🥰': ';xx',
+        '😍': ';xx',
+        '🤣': ":'>",
+        '😂': ":'>",
+        '💩': '/-shit',
+        '🌹': '/-rose',
+        '💔': '/-break',
+        '😕': ';-/',
+        '🤔': ';-/',
+        '😉': ';-)',
+        '👌': '/-ok',
+        '✌️': '/-v',
+        '✌': '/-v',
+        '🙏': '_()_',
+        '👊': '/-punch',
+        '🤯': ':o',
+        '🎉': '/-bd',
+        '🏆': '/-ok',
+        '💯': '/-ok',
+        '😎': 'x-)',
+        '🤩': 'x-)',
+        '🔥': '/-heart',
       };
 
       const zaloIcon = TG_TO_ZALO[tgEmoji];
@@ -821,7 +821,7 @@ export function setupTelegramHandler(
 
       // Look up Zalo quote data for this TG message
       const tgMsgId = update.message_id;
-      const quote   = msgStore.getQuote(tgMsgId);
+      const quote = msgStore.getQuote(tgMsgId);
       if (!quote) {
         console.log(`[TG→Zalo] Reaction: no Zalo quote for TG msg ${tgMsgId}`);
         return;
@@ -1130,7 +1130,7 @@ export function setupTelegramHandler(
       }
 
       if ('document' in msg && msg.document) {
-        const doc   = msg.document;
+        const doc = msg.document;
         const fname = doc.file_name ?? `file_${Date.now()}.bin`;
         const { cap, capMentions } = getCaptionMentions();
         await sendAttachment(doc.file_id, fname, doc.file_size, cap, capMentions);
@@ -1138,7 +1138,7 @@ export function setupTelegramHandler(
       }
 
       if ('video' in msg && msg.video) {
-        const vid   = msg.video;
+        const vid = msg.video;
         const fname = vid.file_name ?? `video_${Date.now()}.mp4`;
         const { cap, capMentions } = getCaptionMentions();
         const mediaGroupId = ('media_group_id' in msg ? (msg as { media_group_id?: string }).media_group_id : undefined);
@@ -1170,7 +1170,7 @@ export function setupTelegramHandler(
           if (isTooBig) { await notifyTooBig(`voice_${Date.now()}.ogg`, msg.voice.file_size); return; }
           throw err;
         }
-        const oggPath  = await downloadToTemp(fileLink.toString(), `voice_${Date.now()}.ogg`);
+        const oggPath = await downloadToTemp(fileLink.toString(), `voice_${Date.now()}.ogg`);
         let m4aPath: string | undefined;
         try {
           m4aPath = await convertToM4a(oggPath);
@@ -1196,8 +1196,8 @@ export function setupTelegramHandler(
         // For animated (tgs) or video (webm) stickers, use the jpg thumbnail
         // so Zalo receives a viewable image instead of a binary animation blob.
         const useThumb = (sticker.is_animated || sticker.is_video) && sticker.thumbnail;
-        const fileId   = useThumb ? sticker.thumbnail!.file_id : sticker.file_id;
-        const ext      = useThumb ? '.jpg' : '.webp';
+        const fileId = useThumb ? sticker.thumbnail!.file_id : sticker.file_id;
+        const ext = useThumb ? '.jpg' : '.webp';
         await sendAttachment(fileId, `sticker_${Date.now()}${ext}`);
         return;
       }
@@ -1215,9 +1215,9 @@ export function setupTelegramHandler(
           // 1. Create poll on Zalo
           const created = await api.createPoll(
             {
-              question:         tgPoll.question,
-              options:          tgPoll.options.map((o: { text: string }) => o.text),
-              isAnonymous:      false,   // force non-anonymous so poll_answer fires
+              question: tgPoll.question,
+              options: tgPoll.options.map((o: { text: string }) => o.text),
+              isAnonymous: false,   // force non-anonymous so poll_answer fires
               allowMultiChoices: tgPoll.allows_multiple_answers ?? false,
             },
             zaloId,
@@ -1230,8 +1230,8 @@ export function setupTelegramHandler(
             tgPoll.question,
             tgPoll.options.map((o: { text: string }) => o.text),
             {
-              message_thread_id:       topicId,
-              is_anonymous:            false,
+              message_thread_id: topicId,
+              is_anonymous: false,
               allows_multiple_answers: tgPoll.allows_multiple_answers ?? false,
             } as Parameters<typeof tgBot.telegram.sendPoll>[3],
           );
@@ -1267,16 +1267,16 @@ export function setupTelegramHandler(
           // 5. Save to pollStore — keyed by both pollId and tgPollUUID
           if (created?.poll_id) {
             pollStore.save({
-              pollId:           created.poll_id,
-              zaloGroupId:      zaloId,
-              tgPollMsgId:      botPollMsg.message_id,
-              tgOrigPollMsgId:  msg.message_id,   // user's original poll
-              tgPollUUID:       tgPollUUID,
-              tgScoreMsgId:     tgScoreMsg.message_id,
-              tgThreadId:       topicId,
+              pollId: created.poll_id,
+              zaloGroupId: zaloId,
+              tgPollMsgId: botPollMsg.message_id,
+              tgOrigPollMsgId: msg.message_id,   // user's original poll
+              tgPollUUID: tgPollUUID,
+              tgScoreMsgId: tgScoreMsg.message_id,
+              tgThreadId: topicId,
               options: zaloPollOptions.map((o: { option_id?: number; content: string }, i: number) => ({
                 option_id: o.option_id ?? i,
-                content:   o.content,
+                content: o.content,
               })),
             });
           }
@@ -1441,9 +1441,11 @@ export function setupTelegramHandler(
             const newMsg = await tgBot.telegram.sendMessage(
               config.telegram.groupId,
               scoreText,
-              { message_thread_id: entry.tgThreadId, parse_mode: 'HTML',
+              {
+                message_thread_id: entry.tgThreadId, parse_mode: 'HTML',
                 reply_parameters: { message_id: entry.tgPollMsgId, allow_sending_without_reply: true },
-                reply_markup: replyMarkup },
+                reply_markup: replyMarkup
+              },
             );
             pollStore.updateScoreMsg(entry.pollId, newMsg.message_id);
           }

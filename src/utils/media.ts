@@ -12,7 +12,6 @@ export async function downloadToTemp(url: string, fileName?: string): Promise<st
   mkdirSync(TMP_DIR, { recursive: true });
 
   // Sanitize filename and add a unique prefix so concurrent downloads
-  // with the same logical name (e.g. multiple 'photo.jpg' in a media group)
   // do not overwrite each other.
   const baseName = (fileName ?? `download_${Date.now()}`)
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -20,31 +19,65 @@ export async function downloadToTemp(url: string, fileName?: string): Promise<st
 
   const filePath = path.join(TMP_DIR, `${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${baseName}`);
 
-  const resp = await axios.get<NodeJS.ReadableStream>(url, {
-    responseType: 'stream',
-    timeout: 30_000,
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ZaloTGBridge/1.0)' },
-  });
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const resp = await axios.get<NodeJS.ReadableStream>(url, {
+        responseType: 'stream',
+        timeout: 30_000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://chat.zalo.me/'
+        },
+      });
 
-  await new Promise<void>((resolve, reject) => {
-    const writer = createWriteStream(filePath);
-    resp.data.pipe(writer);
-    writer.on('finish', () => {
-      try {
-        const stats = statSync(filePath);
-        if (stats.size === 0) {
-          reject(new Error('Downloaded file is 0 bytes'));
-        } else {
-          resolve();
-        }
-      } catch (e) {
-        reject(e);
+      await new Promise<void>((resolve, reject) => {
+        const writer = createWriteStream(filePath);
+        let streamFailed = false;
+
+        resp.data.on('error', (err: any) => {
+          streamFailed = true;
+          writer.close();
+          reject(new Error(`Stream error from ${url}: ${err.message}`));
+        });
+
+        resp.data.pipe(writer);
+
+        writer.on('close', () => {
+          if (streamFailed) return;
+          try {
+            const stats = statSync(filePath);
+            if (stats.size === 0) {
+              reject(new Error(`Downloaded file is 0 bytes from ${url}`));
+            } else {
+              resolve();
+            }
+          } catch (e) {
+            reject(e);
+          }
+        });
+
+        writer.on('error', (err: any) => {
+          streamFailed = true;
+          reject(err);
+        });
+      });
+
+      // If successful, return the path
+      return filePath;
+    } catch (e) {
+      lastErr = e;
+      // Cleanup the corrupted/empty file if any
+      try { await unlink(filePath); } catch { /* ignore */ }
+
+      if (attempt < 3) {
+        // Wait before retrying (1s, 2s)
+        await new Promise(r => setTimeout(r, 1000 * attempt));
       }
-    });
-    writer.on('error', reject);
-  });
+    }
+  }
 
-  return filePath;
+  throw lastErr;
 }
 
 /** Remove a temp file, ignoring errors. */
