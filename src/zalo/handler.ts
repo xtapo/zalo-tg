@@ -1,5 +1,5 @@
 import { ThreadType } from 'zca-js';
-import { createReadStream } from 'fs';
+import { createReadStream, statSync } from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 
@@ -388,8 +388,16 @@ export function setupZaloHandler(api: ZaloAPI): void {
         const url = media.href || media.thumb;
         if (!url) { console.warn('[ZaloHandler] Doodle: no URL'); return; }
         const localPath = await downloadToTemp(url, `doodle_${Date.now()}.jpg`);
-        const stream = createReadStream(localPath);
         try {
+          const stats = statSync(localPath);
+          if (stats.size > 50 * 1024 * 1024) {
+            const mb = (stats.size / 1024 / 1024).toFixed(1);
+            const fallbackText = `${groupCaption(senderName)}<i>[Ảnh vẽ tay quá lớn để chuyển tiếp (${mb} MB)]</i>\n<a href="${url}">🔗 Link tải ảnh</a>`;
+            const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, fallbackText, { ...tgBase, parse_mode: 'HTML' });
+            saveTgMapping(sent);
+            return;
+          }
+          const stream = createReadStream(localPath);
           const sent = await tgBot.telegram.sendPhoto(config.telegram.groupId, { source: stream }, tgOpts);
           saveTgMapping(sent);
         } finally { await cleanTemp(localPath); }
@@ -405,8 +413,16 @@ export function setupZaloHandler(api: ZaloAPI): void {
         }
         const ext = path.extname(url.split('?')[0] ?? '').toLowerCase() || '.mp4';
         const localPath = await downloadToTemp(url, `gif_${Date.now()}${ext}`);
-        const stream = createReadStream(localPath);
         try {
+          const stats = statSync(localPath);
+          if (stats.size > 50 * 1024 * 1024) {
+            const mb = (stats.size / 1024 / 1024).toFixed(1);
+            const fallbackText = `${groupCaption(senderName)}<i>[GIF quá lớn để chuyển tiếp (${mb} MB)]</i>\n<a href="${url}">🔗 Link tải GIF</a>`;
+            const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, fallbackText, { ...tgBase, parse_mode: 'HTML' });
+            saveTgMapping(sent);
+            return;
+          }
+          const stream = createReadStream(localPath);
           const sent = await tgBot.telegram.sendAnimation(
             config.telegram.groupId,
             { source: stream },
@@ -427,8 +443,16 @@ export function setupZaloHandler(api: ZaloAPI): void {
           return;
         }
         const localPath = await downloadToTemp(url, fileName);
-        const stream = createReadStream(localPath);
         try {
+          const stats = statSync(localPath);
+          if (stats.size > 50 * 1024 * 1024) {
+            const mb = (stats.size / 1024 / 1024).toFixed(1);
+            const fallbackText = `${groupCaption(senderName)}<i>[File <b>${escapeHtml(fileName)}</b> quá lớn để chuyển tiếp (${mb} MB)]</i>\n<a href="${url}">🔗 Link tải file</a>`;
+            const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, fallbackText, { ...tgBase, parse_mode: 'HTML' });
+            saveTgMapping(sent);
+            return;
+          }
+          const stream = createReadStream(localPath);
           const sent = await tgBot.telegram.sendDocument(
             config.telegram.groupId,
             { source: stream, filename: fileName },
@@ -444,8 +468,16 @@ export function setupZaloHandler(api: ZaloAPI): void {
         const url = media.href;
         if (!url) { console.warn('[ZaloHandler] Video: no URL found in content:', media); return; }
         const localPath = await downloadToTemp(url, `video_${Date.now()}.mp4`);
-        const stream = createReadStream(localPath);
         try {
+          const stats = statSync(localPath);
+          if (stats.size > 50 * 1024 * 1024) {
+            const mb = (stats.size / 1024 / 1024).toFixed(1);
+            const fallbackText = `${groupCaption(senderName)}<i>[Video quá lớn để chuyển tiếp (${mb} MB)]</i>\n<a href="${url}">🔗 Link tải video</a>`;
+            const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, fallbackText, { ...tgBase, parse_mode: 'HTML' });
+            saveTgMapping(sent);
+            return;
+          }
+          const stream = createReadStream(localPath);
           const sent = await tgBot.telegram.sendVideo(config.telegram.groupId, { source: stream }, tgOpts);
           saveTgMapping(sent);
         } finally { await cleanTemp(localPath); }
@@ -458,8 +490,16 @@ export function setupZaloHandler(api: ZaloAPI): void {
         if (!url) { console.warn('[ZaloHandler] Voice: no URL found in content:', media); return; }
         const ext = path.extname(url.split('?')[0] ?? '').toLowerCase() || '.m4a';
         const localPath = await downloadToTemp(url, `voice_${Date.now()}${ext}`);
-        const stream = createReadStream(localPath);
         try {
+          const stats = statSync(localPath);
+          if (stats.size > 50 * 1024 * 1024) {
+            const mb = (stats.size / 1024 / 1024).toFixed(1);
+            const fallbackText = `${groupCaption(senderName)}<i>[Tin nhắn thoại quá lớn để chuyển tiếp (${mb} MB)]</i>\n<a href="${url}">🔗 Link tải tin nhắn thoại</a>`;
+            const sent = await tgBot.telegram.sendMessage(config.telegram.groupId, fallbackText, { ...tgBase, parse_mode: 'HTML' });
+            saveTgMapping(sent);
+            return;
+          }
+          const stream = createReadStream(localPath);
           const sent = await tgBot.telegram.sendVoice(config.telegram.groupId, { source: stream }, tgOpts);
           saveTgMapping(sent);
         } finally { await cleanTemp(localPath); }
