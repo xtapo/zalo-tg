@@ -19,9 +19,9 @@ const RETRYABLE_NETWORK_CODES = new Set([
 ]);
 const MAX_RETRIES = 3;
 
-const originalCallApi = tgBot.telegram.callApi.bind(tgBot.telegram);
+const originalCallApi = (tgBot.telegram as any).callApi.bind(tgBot.telegram);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-tgBot.telegram.callApi = async function (method: string, payload?: object, options?: any) {
+(tgBot.telegram as any).callApi = async function (method: any, payload?: any, options?: any) {
   let attempt = 0;
   while (true) {
     try {

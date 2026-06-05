@@ -898,15 +898,17 @@ export function setupZaloHandler(api: ZaloAPI): void {
       const topicId = store.getTopicByZalo(String(zaloId), type);
       if (topicId === undefined) return;
 
-      // Delete the forwarded TG message
-      await tgBot.telegram.deleteMessage(config.telegram.groupId, tgMsgId);
-      console.log(`[ZaloHandler] Undo: deleted TG msg ${tgMsgId} (zaloMsgId=${zaloMsgId})`);
+      console.log(`[ZaloHandler] Undo: kept TG msg ${tgMsgId} (zaloMsgId=${zaloMsgId}) and sent recall notification`);
 
-      // Notify in topic
+      // Notify in topic by replying to the original message
       await tgBot.telegram.sendMessage(
         config.telegram.groupId,
-        `<i>🗑 Tin nhắn đã được thu hồi</i>`,
-        { message_thread_id: topicId, parse_mode: 'HTML' },
+        `<i>🗑 Tin nhắn này đã được thu hồi trên Zalo</i>`,
+        {
+          message_thread_id: topicId,
+          parse_mode: 'HTML',
+          reply_parameters: { message_id: tgMsgId, allow_sending_without_reply: true },
+        },
       );
     } catch (err) {
       console.error('[ZaloHandler] Undo error:', err);
