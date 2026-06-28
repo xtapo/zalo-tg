@@ -36,39 +36,63 @@ async function main(): Promise<void> {
   ]).catch(() => undefined);
 
   // ── Start Telegram bot so /login can be received immediately ───────────────
-  // NOTE: tgBot.launch() runs the polling loop forever, so we must NOT await it.
-  // The second argument callback fires once getMe() + deleteWebhook() succeed.
-  tgBot.launch({ allowedUpdates: ['message', 'callback_query', 'message_reaction', 'poll_answer', 'poll'] }, () => {
-    console.log('[Boot] Telegram bot started ✓');
+  const startTime = Date.now();
+  let launchAttempts = 0;
+  const maxLaunchRetries = 5;
+  const retryDelayMs = 2000;
+  let isZaloLoginStarted = false;
 
-    // ── Attempt Zalo login in background ────────────────────────────────────
-    // If credentials.json exists → connects automatically and updates currentApi.
-    // If not → notifies the user to run /login.
-    getZaloApi()
-      .then(async (api) => {
-        setZaloApi(api);   // ← inject into Telegram handler so TG→Zalo works
-        await startZalo(api);
-      })
-      .catch((err: unknown) => {
-        console.warn('[Boot] Zalo auto-login failed:', err);
-        tgBot.telegram
-          .sendMessage(
-            config.telegram.groupId,
-            '⚠️ Chưa đăng nhập Zalo. Gửi <b>/login</b> để đăng nhập.',
-            { parse_mode: 'HTML' },
-          )
-          .catch(() => undefined);
-      });
-  }).catch((err: any) => {
-    const isConflict = err?.code === 409 || err?.response?.error_code === 409 || String(err).includes('409') || String(err).includes('Conflict');
-    if (isConflict) {
-      console.warn('\n⚠️ [Boot] Telegram bot polling terminated: 409 Conflict (another instance is running). Exiting gracefully.');
-      process.exit(0);
-    } else {
-      console.error('\n❌ [Boot] Telegram bot polling failed:', err);
-      process.exit(1);
-    }
-  });
+  const launchTelegramBot = () => {
+    launchAttempts++;
+    
+    // NOTE: tgBot.launch() runs the polling loop forever, so we must NOT await it.
+    // The second argument callback fires once getMe() + deleteWebhook() succeed.
+    tgBot.launch({ allowedUpdates: ['message', 'callback_query', 'message_reaction', 'poll_answer', 'poll'] }, () => {
+      if (!isZaloLoginStarted) {
+        isZaloLoginStarted = true;
+        console.log('[Boot] Telegram bot started ✓');
+
+        // ── Attempt Zalo login in background ────────────────────────────────────
+        // If credentials.json exists → connects automatically and updates currentApi.
+        // If not → notifies the user to run /login.
+        getZaloApi()
+          .then(async (api) => {
+            setZaloApi(api);   // ← inject into Telegram handler so TG→Zalo works
+            await startZalo(api);
+          })
+          .catch((err: unknown) => {
+            console.warn('[Boot] Zalo auto-login failed:', err);
+            tgBot.telegram
+              .sendMessage(
+                config.telegram.groupId,
+                '⚠️ Chưa đăng nhập Zalo. Gửi <b>/login</b> để đăng nhập.',
+                { parse_mode: 'HTML' },
+              )
+              .catch(() => undefined);
+          });
+      } else {
+        console.log(`[Boot] Telegram bot re-started (after conflict retry) ✓`);
+      }
+    }).catch(async (err: any) => {
+      const isConflict = err?.code === 409 || err?.response?.error_code === 409 || String(err).includes('409') || String(err).includes('Conflict');
+      if (isConflict) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 15000 && launchAttempts <= maxLaunchRetries) {
+          console.warn(`\n⚠️ [Boot] Telegram bot polling conflict (409) during startup. Retrying in ${retryDelayMs}ms... (Attempt ${launchAttempts}/${maxLaunchRetries})`);
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+          launchTelegramBot();
+        } else {
+          console.warn('\n⚠️ [Boot] Telegram bot polling terminated: 409 Conflict (another instance is running). Exiting gracefully.');
+          process.exit(0);
+        }
+      } else {
+        console.error('\n❌ [Boot] Telegram bot polling failed:', err);
+        process.exit(1);
+      }
+    });
+  };
+
+  launchTelegramBot();
 
   console.log('[Boot] Bridge is running 🚀  (Ctrl+C to stop)');
 
