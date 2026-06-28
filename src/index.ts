@@ -59,6 +59,15 @@ async function main(): Promise<void> {
           )
           .catch(() => undefined);
       });
+  }).catch((err: any) => {
+    const isConflict = err?.code === 409 || err?.response?.error_code === 409 || String(err).includes('409') || String(err).includes('Conflict');
+    if (isConflict) {
+      console.warn('\n⚠️ [Boot] Telegram bot polling terminated: 409 Conflict (another instance is running). Exiting gracefully.');
+      process.exit(0);
+    } else {
+      console.error('\n❌ [Boot] Telegram bot polling failed:', err);
+      process.exit(1);
+    }
   });
 
   console.log('[Boot] Bridge is running 🚀  (Ctrl+C to stop)');
