@@ -20,6 +20,7 @@ A bidirectional message bridge between **Zalo** and **Telegram**, implemented in
 - [Configuration](#configuration)
 - [Running](#running)
 - [Bot Commands](#bot-commands)
+- [Web Dashboard](#web-dashboard)
 - [Project Structure](#project-structure)
 - [Security Considerations](#security-considerations)
 - [License](#license)
@@ -164,6 +165,9 @@ TG_GROUP_ID=-1001234567890
 # Directory for persistent data (topics.json, credentials.json)
 # Defaults to ./data if omitted
 DATA_DIR=./data
+
+# Port for the management web dashboard (defaults to 3000 if omitted)
+WEB_PORT=3000
 ```
 
 ---
@@ -193,6 +197,42 @@ On first run with no existing `credentials.json`, send `/login` inside any topic
 | `/topic list` | List all active topic–conversation mappings |
 | `/topic info` | Show the Zalo conversation details for the current topic |
 | `/topic delete` | Remove the mapping for the current topic |
+
+---
+
+## Web Dashboard
+
+Alongside the Telegram bot, the bridge serves a lightweight **management dashboard**
+(built with Node's native `http` module — no extra dependencies) for viewing and
+managing topic mappings from a browser.
+
+Once the process is running, open:
+
+```
+http://localhost:3000
+```
+
+(or the port set via `WEB_PORT`).
+
+**Features:**
+- Live status cards — Zalo / Telegram connection state, logged-in Zalo account,
+  total topics, and process uptime.
+- Searchable table of all topic ↔ conversation mappings (by name, Zalo ID, or topic ID).
+- Delete a mapping directly from the UI (equivalent to `/topic delete`).
+- Re-read `topics.json` from disk after external edits.
+
+**HTTP API** (consumed by the dashboard, also usable directly):
+
+| Method & Path | Description |
+|---|---|
+| `GET /api/status` | Bridge status + topic count + uptime |
+| `GET /api/topics?q=` | List topic mappings (optional search query) |
+| `DELETE /api/topics/:topicId` | Remove a topic mapping |
+| `POST /api/reload` | Re-read `topics.json` from disk |
+
+> The dashboard has no authentication and is intended to run on `localhost` only.
+> Do not expose the `WEB_PORT` to a public network without adding a reverse proxy
+> with access control.
 
 ---
 

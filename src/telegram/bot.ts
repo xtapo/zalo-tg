@@ -25,7 +25,11 @@ const originalCallApi = (tgBot.telegram as any).callApi.bind(tgBot.telegram);
   let attempt = 0;
   while (true) {
     try {
-      return await originalCallApi(method, payload, options);
+      const res = await originalCallApi(method, payload, options);
+      if (method === 'getUpdates') {
+        (tgBot as any).hasPolledSuccessfully = true;
+      }
+      return res;
     } catch (err: any) {
       const code: string | undefined = err.code ?? err.errno;
 

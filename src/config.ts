@@ -27,4 +27,8 @@ export const config = {
     credentialsPath: resolvePath(process.env.ZALO_CREDENTIALS_PATH, 'credentials.json'),
   },
   dataDir: resolvePath(process.env.DATA_DIR, 'data'),
+  web: {
+    /** Port for the management dashboard. Set WEB_PORT to override (default 3000). */
+    port: Number(process.env.WEB_PORT ?? 3002),
+  },
 } as const;

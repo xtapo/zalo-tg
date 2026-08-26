@@ -3,12 +3,29 @@ import { setupZaloHandler } from './zalo/handler.js';
 import { tgBot } from './telegram/bot.js';
 import { setupTelegramHandler } from './telegram/handler.js';
 import { config } from './config.js';
+import { startWebServer, type BridgeStatus } from './web/server.js';
+
+// ── Live bridge status (surfaced by the management dashboard) ────────────────
+
+const bridgeStatus: BridgeStatus = {
+  zaloConnected: false,
+  telegramConnected: false,
+  zaloName: undefined,
+  startedAt: Date.now(),
+};
 
 // ── Boot Zalo (also used when /login swaps in a fresh API) ───────────────────
 
 async function startZalo(api: Awaited<ReturnType<typeof getZaloApi>>): Promise<void> {
   setupZaloHandler(api);
   api.listener.start();
+  bridgeStatus.zaloConnected = true;
+  // Best-effort: capture the logged-in account's display name for the dashboard.
+  try {
+    const info = await api.fetchAccountInfo?.();
+    const name = info?.profile?.displayName ?? info?.displayName;
+    if (name) bridgeStatus.zaloName = String(name);
+  } catch { /* non-fatal */ }
   console.log('[Boot] Zalo listener started ✓');
 }
 
@@ -36,7 +53,6 @@ async function main(): Promise<void> {
   ]).catch(() => undefined);
 
   // ── Start Telegram bot so /login can be received immediately ───────────────
-  const startTime = Date.now();
   let launchAttempts = 0;
   const maxLaunchRetries = 5;
   const retryDelayMs = 2000;
@@ -50,6 +66,7 @@ async function main(): Promise<void> {
     tgBot.launch({ allowedUpdates: ['message', 'callback_query', 'message_reaction', 'poll_answer', 'poll'] }, () => {
       if (!isZaloLoginStarted) {
         isZaloLoginStarted = true;
+        bridgeStatus.telegramConnected = true;
         console.log('[Boot] Telegram bot started ✓');
 
         // ── Attempt Zalo login in background ────────────────────────────────────
@@ -76,8 +93,8 @@ async function main(): Promise<void> {
     }).catch(async (err: any) => {
       const isConflict = err?.code === 409 || err?.response?.error_code === 409 || String(err).includes('409') || String(err).includes('Conflict');
       if (isConflict) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < 15000 && launchAttempts <= maxLaunchRetries) {
+        const hasPolled = (tgBot as any).hasPolledSuccessfully === true;
+        if (!hasPolled && launchAttempts <= maxLaunchRetries) {
           console.warn(`\n⚠️ [Boot] Telegram bot polling conflict (409) during startup. Retrying in ${retryDelayMs}ms... (Attempt ${launchAttempts}/${maxLaunchRetries})`);
           await new Promise(resolve => setTimeout(resolve, retryDelayMs));
           launchTelegramBot();
@@ -93,6 +110,9 @@ async function main(): Promise<void> {
   };
 
   launchTelegramBot();
+
+  // ── Start the management dashboard ─────────────────────────────────────────
+  startWebServer({ getStatus: () => bridgeStatus }, config.web.port);
 
   console.log('[Boot] Bridge is running 🚀  (Ctrl+C to stop)');
 

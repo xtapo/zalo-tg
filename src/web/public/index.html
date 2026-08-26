@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zalo ↔ Telegram Bridge — Bảng điều khiển</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">Z↔T</span>
+      <div>
+        <h1>Zalo ↔ Telegram Bridge</h1>
+        <p class="subtitle">Bảng điều khiển quản lý topic</p>
+      </div>
+    </div>
+    <button id="refreshBtn" class="btn btn-ghost" title="Làm mới">⟳ Làm mới</button>
+  </header>
+
+  <main>
+    <!-- ── Status cards ─────────────────────────────────────────── -->
+    <section class="cards" id="statusCards">
+      <div class="card">
+        <span class="card-label">Zalo</span>
+        <span class="card-value" id="zaloStatus"><span class="dot dot-idle"></span>—</span>
+        <span class="card-sub" id="zaloName"></span>
+      </div>
+      <div class="card">
+        <span class="card-label">Telegram</span>
+        <span class="card-value" id="tgStatus"><span class="dot dot-idle"></span>—</span>
+        <span class="card-sub" id="tgGroup"></span>
+      </div>
+      <div class="card">
+        <span class="card-label">Tổng số topic</span>
+        <span class="card-value" id="topicCount">—</span>
+        <span class="card-sub">cuộc trò chuyện đã map</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Thời gian chạy</span>
+        <span class="card-value" id="uptime">—</span>
+        <span class="card-sub">kể từ lần khởi động</span>
+      </div>
+    </section>
+
+    <!-- ── Topics ───────────────────────────────────────────────── -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Danh sách Topic</h2>
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Tìm theo tên, Zalo ID, topic ID…" />
+          <button id="reloadBtn" class="btn btn-ghost" title="Đọc lại từ đĩa">Đọc lại từ đĩa</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="topicsTable">
+          <thead>
+            <tr>
+              <th>Tên</th>
+              <th>Loại</th>
+              <th>Zalo ID</th>
+              <th>Topic ID</th>
+              <th class="col-actions">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="topicsBody">
+            <tr><td colspan="5" class="empty">Đang tải…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

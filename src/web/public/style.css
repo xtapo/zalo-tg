@@ -1,0 +1,177 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --panel: #121a2b;
+  --panel-2: #182235;
+  --text: #e8eefc;
+  --muted: #9fb0d0;
+  --line: #26324a;
+  --accent: #5aa9ff;
+  --danger: #ff6b6b;
+  --ok: #2ecc71;
+  --idle: #f1c40f;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1220 0%, #0f1728 100%);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(10px);
+  background: rgba(11, 18, 32, 0.85);
+}
+
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2d7ff9, #7b61ff);
+  font-weight: 800;
+}
+h1 { margin: 0; font-size: 1.25rem; }
+.subtitle { margin: 4px 0 0; color: var(--muted); }
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card, .panel {
+  background: rgba(18, 26, 43, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-label { color: var(--muted); font-size: 0.92rem; }
+.card-value { font-size: 1.35rem; font-weight: 700; }
+.card-sub { color: var(--muted); font-size: 0.92rem; }
+
+.panel { padding: 18px; }
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.panel-head h2 { margin: 0; font-size: 1.1rem; }
+.toolbar { display: flex; gap: 10px; align-items: center; }
+
+input[type="search"] {
+  min-width: 320px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  outline: none;
+}
+input[type="search"]:focus { border-color: var(--accent); }
+
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+.btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+.btn-danger { border-color: rgba(255, 107, 107, 0.35); color: #ffd7d7; }
+.btn-danger:hover { border-color: var(--danger); }
+
+.table-wrap { overflow: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+th { color: var(--muted); font-weight: 600; font-size: 0.92rem; }
+tr:hover td { background: rgba(255, 255, 255, 0.02); }
+.col-actions { width: 120px; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+.dot-ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.15); }
+.dot-bad { background: var(--danger); box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.15); }
+.dot-idle { background: var(--idle); box-shadow: 0 0 0 4px rgba(241, 196, 15, 0.15); }
+
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  background: #101827;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #cfe2ff;
+}
+
+@media (max-width: 960px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel-head, .toolbar, .topbar { flex-direction: column; align-items: stretch; }
+  input[type="search"] { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 640px) {
+  main { padding: 16px; }
+  .cards { grid-template-columns: 1fr; }
+}
